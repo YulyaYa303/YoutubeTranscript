@@ -51,17 +51,18 @@ async function getTranscript(id, key) {
   return content.trim();
 }
 
-async function summarize(transcript, key) {
+async function summarize(transcript, key, timeoutMs) {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
-    signal: AbortSignal.timeout(19_000),
+    signal: AbortSignal.timeout(timeoutMs),
     headers: {
       Authorization: 'Bearer ' + key,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       model: 'openrouter/free',
-      max_tokens: 650,
+      max_tokens: 2400,
+      reasoning: { effort: 'low' },
       messages: [
         {
           role: 'system',
@@ -102,6 +103,7 @@ export async function handle(request) {
     return json({ error: 'Сервис транскрипции ещё не настроен.' }, 503);
   }
 
+  const deadline = Date.now() + 55_000;
   let transcript;
   try {
     transcript = await getTranscript(id, supadataKey);
@@ -119,7 +121,7 @@ export async function handle(request) {
   const openRouterKey = process.env.OPENROUTER_API_KEY;
   if (openRouterKey) {
     try {
-      summary = await summarize(transcript, openRouterKey);
+      summary = await summarize(transcript, openRouterKey, Math.max(1, deadline - Date.now()));
     } catch {
       // The transcript remains usable if the summary provider fails.
     }

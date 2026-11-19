@@ -4,5 +4,5 @@
   "private": true,
   "type": "module",
   "engines": { "node": "24.x" },
-  "scripts": { "dev": "node dev.mjs" }
+  "scripts": { "dev": "node --use-env-proxy dev.mjs" }
 }
