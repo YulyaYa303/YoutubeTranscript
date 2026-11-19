@@ -27,7 +27,7 @@ form.addEventListener('submit', async event => {
     if (!response.ok || !result?.transcript) {
       throw new Error(result?.error || 'Сервис временно недоступен. Попробуйте ещё раз.');
     }
-    summary.textContent = result.summary || 'Не удалось подготовить краткое содержание. Полный текст доступен ниже.';
+    summary.textContent = result.summary || result.summaryNotice || 'Не удалось подготовить краткое содержание. Полный текст доступен ниже.';
     transcript.textContent = result.transcript;
     results.hidden = false;
     status.textContent = '';

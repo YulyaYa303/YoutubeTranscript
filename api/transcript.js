@@ -72,10 +72,12 @@ async function summarize(transcript, key, timeoutMs) {
       ],
     }),
   });
-  if (!response.ok) throw new Error('OpenRouter HTTP ' + response.status);
+  if (!response.ok) return { status: response.status };
   const result = await response.json();
+  if (result.error) return { status: Number(result.error.code) || 502 };
   const summary = result.choices?.[0]?.message?.content;
-  return typeof summary === 'string' ? summary.trim() || null : null;
+  if (typeof summary === 'string' && summary.trim()) return { summary: summary.trim() };
+  return { status: 502 };
 }
 
 function json(body, status = 200, headers = {}) {
@@ -117,16 +119,38 @@ export async function handle(request) {
   }
   if (!transcript) return json({ error: 'Для этого видео не удалось найти текст.' }, 404);
 
-  let summary = null;
-  const openRouterKey = process.env.OPENROUTER_API_KEY;
-  if (openRouterKey) {
-    try {
-      summary = await summarize(transcript, openRouterKey, Math.max(1, deadline - Date.now()));
-    } catch {
-      // The transcript remains usable if the summary provider fails.
+  const key = process.env.OPENROUTER_API_KEY?.trim();
+  let summaryNotice = 'На сервере не задан ключ OpenRouter для краткого содержания.';
+  if (key) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let status;
+      try {
+        const result = await summarize(transcript, key, Math.max(1, deadline - Date.now()));
+        if (result.summary) return json({ transcript, summary: result.summary });
+        status = result.status;
+      } catch (error) {
+        status = error.name === 'TimeoutError' ? 504 : 502;
+      }
+      console.warn('OpenRouter summary unavailable', { status, attempt: attempt + 1 });
+      if (status === 401 || status === 403) {
+        summaryNotice = 'OpenRouter отклонил доступ к модели.';
+        break;
+      }
+      if (status === 429) {
+        summaryNotice = 'Достигнут лимит запросов OpenRouter. Попробуйте позже.';
+        break;
+      }
+      if (status === 402) {
+        summaryNotice = 'OpenRouter сообщил о недостатке средств для запроса.';
+        break;
+      }
+      summaryNotice = status === 504
+        ? 'OpenRouter не успел подготовить краткое содержание. Попробуйте позже.'
+        : 'OpenRouter не вернул краткое содержание. Попробуйте позже.';
+      if (status < 500 || deadline - Date.now() < 8000) break;
     }
   }
-  return json({ transcript, summary });
+  return json({ transcript, summary: null, summaryNotice });
 }
 
 export default {
