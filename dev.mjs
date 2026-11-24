@@ -22,11 +22,12 @@ createServer(async (req, res) => {
     if (url.pathname === '/api/transcript') {
       const response = await handle(new Request(url, {
         method: req.method,
+        headers: { accept: req.headers.accept || 'application/json' },
         body: req.method === 'POST' ? Readable.toWeb(req) : undefined,
         duplex: 'half',
       }));
       res.writeHead(response.status, Object.fromEntries(response.headers));
-      res.end(await response.text());
+      Readable.fromWeb(response.body).on('error', () => res.destroy()).pipe(res);
       return;
     }
     if (!Object.hasOwn(files, url.pathname)) {
